@@ -1,19 +1,10 @@
 # Sample MCP Services
 
-This directory contains sample MCP Service classes demonstrating `iris-mcp-server` integration with InterSystems IRIS.
+In AI Hub, you can expose ObjectScript methods defined in your InterSystems IRIS instance as MCP endpoints accessible to any MCP client. The `iris-mcp-server` binary serves as a bridge (bundled with your InterSystems IRIS installation) between your MCP client and InterSystems IRIS.
 
-## MCP Services
+This directory contains a sample MCP Service class that exposes the [BasicMath](/objectscript/cls/Sample/AI/ToolSet/BasicMath.cls) toolset.
 
-### `Sample.MCP.Service.Calculator`
-
-**Purpose**: Sample MCP service demonstrating policies and tool composition.
-
-**Tools exposed**:
-- `Sample.AI.ToolSet.BasicMath` — Add, Subtract, Multiply, Divide with an audit policy
-
-**Use case**: Shows best practices for a production MCP service: ToolSet composition, audit policy enforcement, and endpoint setup.
-
-## Setup in InterSystems IRIS
+## InterSystems IRIS Setup
 
 1. Load the sample classes:
    ```objectscript
@@ -25,21 +16,26 @@ This directory contains sample MCP Service classes demonstrating `iris-mcp-serve
    - Namespace: `USER` (or your namespace)
    - Dispatch Class: `Sample.MCP.Service.Calculator`
    - Enabled: ✓ Yes
-   - Authentication: **Password** (or **Unauthenticated** for development)
+   - Allowed Authentication Methods: **Password** (or **Unauthenticated** for development)
 4. Click **Save**.
 
-## Using with `iris-mcp-server`
+## `iris-mcp-server` Setup
 
-### Authentication Overview
+`iris-mcp-server` acts as a bridge between your MCP client and InterSystems IRIS. To do this, it must first authenticate with the InterSystems IRIS instance ("layer 1") and then facilitate authentication by the MCP client to your InterSystems IRIS MCP endpoint ("layer 2"); the examples below give example configuration files for `iris-mcp-server` for both connections.
 
-iris-mcp-server has two independent authentication layers:
-
-| Layer | What it secures | Where configured |
-|-------|-----------------|-----------------|
-| **wgproto transport** | iris-mcp-server to IRIS web gateway | `[[iris]] server.username` / `server.password` |
-| **CSP application** | Per-request user identity | `[[iris]] endpoints[].username` / `password` / `bearer` |
+For details on the two layers of authentication, see the [AI Hub documentation](https://docs.intersystems.com/iris20263/csp/docbook/DocBook.UI.Page.cls?KEY=BAIHUB_mcp#BAIHUB_authentication).
 
 ### Basic Configuration (Unauthenticated endpoint)
+
+This configuration does the following:
+- Specifies, in `iris.server`, the following connection information for an InterSystems IRIS instance:
+  - Reachable on `localhost`
+  - Whose superserver port is  `52773`
+  - Authenticate `iris-mcp-server` as the `CSPSystem` user
+- Specifies, in `endpoints.path`, the name `/mcp/calculator`, which is the [name of the MCP service endpoint](#intersystems-iris-setup).
+- It omits any credentials in `endpoints` because this is for an `Unauthenticated` endpoint.
+
+Create a file called `config.toml` with the following content:
 
 ```toml
 [mcp]
@@ -59,20 +55,39 @@ output = "file"
 file   = "iris-mcp.log"
 ```
 
-### Configuration with Authenticated Endpoint
+### Configuration with an Authenticated Endpoint
+
+This configuration does the following:
+- `iris.server` - The following connection information for an InterSystems IRIS instance:
+  - Reachable on `localhost`
+  - Whose superserver port is  `52773`
+  - Authenticate `iris-mcp-server` as the `CSPSystem` user
+- `endpoints.path` - The name `/mcp/calculator`, which is the [name of the MCP service endpoint](#intersystems-iris-setup).
+- `endpoints.username` and `endpoints.password` - The credentials that the MCP client should use to authenticate with the InterSystems IRIS MCP server endpoint. This assumes that you [selected `Password` for the server endpoint's `Allowed Authentication Methods`](#intersystems-iris-setup).
+
+Create a file called `config.toml` with the following content:
 
 ```toml
+[mcp]
+transport = "stdio"
+
 [[iris]]
 name   = "local"
 server = { host = "localhost", port = 52773, username = "CSPSystem", password = "SYS" }
+pool   = { min = 2, max = 10 }
 endpoints = [
   { path = "/mcp/calculator", username = "_SYSTEM", password = "SYS" },
 ]
+
+[logging]
+level  = "debug"
+output = "file"
+file   = "iris-mcp.log"
 ```
 
-For a Bearer token: `{ path = "/mcp/calculator", bearer = "mytoken" }`.
+If you want to use a Bearer token instead, use `endpoints.bearer`:
 
-For Remote MCP (HTTP/SSE) with OAuth the `Authorization` header from each incoming client session is forwarded to IRIS automatically — no endpoint credentials needed.
+`{ path = "/mcp/calculator", bearer = "mytoken" }`
 
 ### Run and Test
 
@@ -97,7 +112,3 @@ async def test():
 
 asyncio.run(test())
 ```
-
-## Automated Testing
-
-See the Python test suite in `iris-mcp/tests/` for automated integration tests.
