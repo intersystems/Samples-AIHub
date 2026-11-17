@@ -21,23 +21,10 @@ XData Definition [ MimeType = application/xml ]
 
         <Tool Name="search_context" Method="SearchContext">
             <Description>Search context for a query and return matching snippets.</Description>
-            <Parameters>
-                <Parameter Name="query" Type="string" Required="true">
-                    <Description>Case-insensitive query term</Description>
-                </Parameter>
-                <Parameter Name="limit" Type="integer" Required="false">
-                    <Description>Maximum number of matches (default 5)</Description>
-                </Parameter>
-            </Parameters>
         </Tool>
 
         <Tool Name="store_note" Method="StoreNote">
             <Description>Store an intermediate note for later synthesis.</Description>
-            <Parameters>
-                <Parameter Name="note" Type="string" Required="true">
-                    <Description>Intermediate finding to persist</Description>
-                </Parameter>
-            </Parameters>
         </Tool>
 
         <Tool Name="summarize_notes" Method="SummarizeNotes">
@@ -46,11 +33,6 @@ XData Definition [ MimeType = application/xml ]
 
         <Tool Name="finalize" Method="Finalize">
             <Description>Finalize the answer and mark workflow complete.</Description>
-            <Parameters>
-                <Parameter Name="result" Type="string" Required="true">
-                    <Description>Final answer text</Description>
-                </Parameter>
-            </Parameters>
         </Tool>
     </ToolSet>
 }

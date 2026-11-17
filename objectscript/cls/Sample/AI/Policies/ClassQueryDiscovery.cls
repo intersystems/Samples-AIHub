@@ -123,27 +123,110 @@ Method ResolveClass(cls As %String, catalog As %DynamicArray) As %Status [ Inter
 }
 
 /// Parse a compiled query FormalSpec string into a local array of argument
-/// descriptors, using the IRIS compiler's own parsing routine.
+/// descriptors. FormalSpec's grammar (from %Dictionary.CompiledQuery) is
+/// "name[:type[(params)]][=default]" comma-separated, e.g.
+/// `Pattern:%String="",ClassType:%String=""`. Hand-rolled with SplitTopLevel/
+/// FindTopLevel below rather than reaching into the IRIS compiler's own
+/// internal formal-spec parser -- that's not a stable public API across
+/// versions (confirmed: the tag this used to call no longer exists).
 ///
 /// After the call, parsedArgs contains:
 ///   parsedArgs       = total number of arguments
 ///   parsedArgs(i)    = argument name
-///   parsedArgs(i, 2) = IRIS type (e.g. "%String", "%Integer")
-///   parsedArgs(i, 2, "DESCRIPTION") = DESCRIPTION type-parameter if present
+///   parsedArgs(i, 2) = IRIS type (e.g. "%String", "%Integer") -- any
+///                      parenthesized type-parameter list is stripped
+///   parsedArgs(i, 2, "DESCRIPTION") = DESCRIPTION type-parameter value if present
 ///   parsedArgs(i, 3) = default value (key absent = no default = required)
-///
-/// $$parseFormal^%occName is the IRIS compiler utility used internally to parse
-/// method and query formal specifications.  The first argument must be "Method"
-/// even for queries -- it controls how the spec is interpreted.
 ClassMethod ParseFormalSpec(queryName As %String, formalSpec As %String, Output parsedArgs) As %Status [ Internal, Private ]
 {
     Kill parsedArgs
+    Set parsedArgs = 0
     Try {
-        Do $$parseFormal^%occName("Method", queryName, formalSpec, .parsedArgs)
+        Set params = ..SplitTopLevel(formalSpec, ",")
+        For i=1:1:$LISTLENGTH(params) {
+            Set param = $ZSTRIP($LISTGET(params, i), "<>W")
+            Continue:param=""
+
+            // Split off "=default" at the first top-level "=".
+            Set eqPos = ..FindTopLevel(param, "=")
+            Set hasDefault = (eqPos > 0)
+            Set nameType = $SELECT(hasDefault: $EXTRACT(param, 1, eqPos-1), 1: param)
+            Set default  = $SELECT(hasDefault: $EXTRACT(param, eqPos+1, *), 1: "")
+
+            // Split "name:type" at the first ":".
+            Set colonPos = $FIND(nameType, ":")
+            Set argname = $SELECT(colonPos>0: $EXTRACT(nameType, 1, colonPos-2), 1: nameType)
+            Set argtype = $SELECT(colonPos>0: $EXTRACT(nameType, colonPos, *), 1: "")
+
+            Set parsedArgs = parsedArgs + 1
+            Set parsedArgs(parsedArgs) = argname
+
+            // Strip a parenthesized type-parameter list, extracting DESCRIPTION if present.
+            Set parenPos = $FIND(argtype, "(")
+            If parenPos > 0 {
+                Set typeParams = $EXTRACT(argtype, parenPos, $LENGTH(argtype)-1)
+                Set argtype = $EXTRACT(argtype, 1, parenPos-2)
+                Set descMatch = ##class(%Regex.Matcher).%New("DESCRIPTION\s*=\s*""([^""]*)""", typeParams)
+                If descMatch.Locate() {
+                    Set parsedArgs(parsedArgs, 2, "DESCRIPTION") = descMatch.Group(1)
+                }
+            }
+            Set parsedArgs(parsedArgs, 2) = argtype
+            If hasDefault Set parsedArgs(parsedArgs, 3) = default
+        }
     } Catch ex {
         Return ex.AsStatus()
     }
     Return $$$OK
+}
+
+/// Split str on every top-level occurrence of delim -- one not nested inside
+/// "..." quotes or (...) parens -- returning a $LIST of the pieces. Needed
+/// because a default value or type-parameter list can itself contain delim.
+ClassMethod SplitTopLevel(str As %String, delim As %String) As %List [ Internal, Private ]
+{
+    Set result = "", depth = 0, inQuote = 0, start = 1
+    Set len = $LENGTH(str)
+    For i=1:1:len {
+        Set ch = $EXTRACT(str, i)
+        If inQuote {
+            If ch = """" Set inQuote = 0
+        } ElseIf ch = """" {
+            Set inQuote = 1
+        } ElseIf ch = "(" {
+            Set depth = depth + 1
+        } ElseIf ch = ")" {
+            Set depth = depth - 1
+        } ElseIf (ch = delim) && (depth = 0) {
+            Set result = result _ $LISTBUILD($EXTRACT(str, start, i-1))
+            Set start = i + 1
+        }
+    }
+    Return result _ $LISTBUILD($EXTRACT(str, start, len))
+}
+
+/// Find the first top-level occurrence of ch in str (not nested inside
+/// "..." quotes or (...) parens), or 0 if none. Same nesting rules as
+/// SplitTopLevel.
+ClassMethod FindTopLevel(str As %String, ch As %String) As %Integer [ Internal, Private ]
+{
+    Set depth = 0, inQuote = 0
+    Set len = $LENGTH(str)
+    For i=1:1:len {
+        Set c = $EXTRACT(str, i)
+        If inQuote {
+            If c = """" Set inQuote = 0
+        } ElseIf c = """" {
+            Set inQuote = 1
+        } ElseIf c = "(" {
+            Set depth = depth + 1
+        } ElseIf c = ")" {
+            Set depth = depth - 1
+        } ElseIf (c = ch) && (depth = 0) {
+            Return i
+        }
+    }
+    Return 0
 }
 
 // ---------------------------------------------------------------------------
