@@ -8,7 +8,7 @@ This directory contains a sample MCP Service class that exposes the [BasicMath](
 
 1. Load the sample classes:
    ```objectscript
-   USER> Do $system.OBJ.ImportDir("/path/to/examples/objectscript/cls", "*.cls", "ck", .errors, 1)
+   USER> Do $SYSTEM.OBJ.Import("/path/to/Samples-AIHub/objectscript/cls", "ck", "*.cls", .errors, .imported)
    ```
 2. In the Management Portal go to **System Administration > Security > Applications > MCP Servers**.
 3. Click **Create New MCP Server** and specify:

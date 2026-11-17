@@ -7,7 +7,7 @@ This repository contains various examples for how to use the two main parts of A
 To load the examples in this repository:
 
 ```objectscript
-USER> Do $SYSTEM.OBJ.ImportDir("/path/to/examples/objectscript/cls", "*.cls", "ck", .errors, 1)
+USER> Do $SYSTEM.OBJ.Import("/path/to/Samples-AIHub/objectscript/cls", "ck", "*.cls", .errors, .imported)
 ```
 
 ## Prerequisites
